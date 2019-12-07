@@ -4,6 +4,10 @@
 #
 # AUTHOR::  Kyle Mullins
 
+class Array
+  alias take shift
+end
+
 module Intcode
   class Instruction
     def self.create(instr, input, output)
@@ -84,7 +88,7 @@ module Intcode
     end
 
     def run(memory, _opcode, *params)
-      memory[params[0]] = @input.pop
+      memory[params[0]] = @input.take
     end
   end
 
@@ -98,7 +102,7 @@ module Intcode
     end
 
     def run(memory, _opcode, *params)
-      @output.push(param(memory, params[0], @pmodes[0]))
+      @output << param(memory, params[0], @pmodes[0])
     end
   end
 
