@@ -4,6 +4,7 @@
 #
 # AUTHOR::  Kyle Mullins
 
+require 'concurrent-edge'
 require_relative '../Common/intcode/computer'
 
 module Day07
@@ -12,28 +13,54 @@ module Day07
   end
 
   def run_amp_circuit(memory, phases)
-    output = [0]
+    channels = setup_channels(phases)
+    last_thread = nil
 
-    phases.each do |phase|
-      output = Intcode::Computer.program(memory.dup).run([phase] + output)
+    channels.each_cons(2) do |input, output|
+      last_thread = Thread.new { Intcode::Computer.program(memory.dup).run(input, output) }
     end
 
-    output.first
+    last_thread.join
+    channels.last.take
+  end
+
+  def setup_channels(phases, initial_input = 0)
+    channels = phases.map do |phase|
+      Concurrent::Channel.new(capacity: 10).tap do |channel|
+        channel << phase
+      end
+    end
+
+    channels << channels[0]
+    channels[0] << initial_input
+    channels
+  end
+
+  def optimize_signal(input, phase_range)
+    max_signal = 0
+
+    phase_range.to_a.permutation.each do |phases|
+      signal = run_amp_circuit(input, phases)
+
+      max_signal = signal if signal > max_signal
+    end
+
+    max_signal
   end
 
   class Part1
     include Day07
 
     def solve(input)
-      max_signal = 0
+      optimize_signal(input, (0..4))
+    end
+  end
 
-      (0..4).to_a.permutation.each do |phases|
-        signal = run_amp_circuit(input, phases)
+  class Part2
+    include Day07
 
-        max_signal = signal if signal > max_signal
-      end
-
-      max_signal
+    def solve(input)
+      optimize_signal(input, (5..9))
     end
   end
 end

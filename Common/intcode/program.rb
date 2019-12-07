@@ -18,8 +18,8 @@ module Intcode
       @memory[2] = verb
     end
 
-    def run(input = [])
-      Intcode::Computer.run_intcode(@memory, input)
+    def run(input = [], output = [])
+      Intcode::Computer.run_intcode(@memory, input, output)
     end
   end
 end

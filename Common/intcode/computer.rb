@@ -16,10 +16,9 @@ module Intcode
       end
     end
 
-    def self.run_intcode(memory, input = [])
+    def self.run_intcode(memory, input = [], output = [])
       done = false
       ptr = 0
-      output = []
 
       until done
         instruction = Intcode::Instruction.create(memory[ptr], input, output)
