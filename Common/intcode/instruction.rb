@@ -10,13 +10,13 @@ end
 
 module Intcode
   class Instruction
-    def self.create(instr, input, output)
+    def self.create(instr, relative_ptr, input, output)
       instr = format('%05d', instr)
       opcode = instr[-2..-1].to_i
       pmodes = instr.chars[0..2].map(&:to_i).reverse
 
       instruction = instructions.find { |i| i.opcode == opcode } || InvalidInstruction
-      instruction.new(pmodes, input, output)
+      instruction.new(pmodes, relative_ptr, input, output)
     end
 
     def self.instructions
@@ -27,8 +27,9 @@ module Intcode
       instructions << subclass
     end
 
-    def initialize(pmodes, input, output)
+    def initialize(pmodes, relative_ptr, input, output)
       @pmodes = pmodes
+      @relative_ptr = relative_ptr
       @input = input
       @output = output
     end
@@ -41,68 +42,54 @@ module Intcode
       pointer + num_params + 1
     end
 
+    def new_relative_ptr
+      @relative_ptr
+    end
+
     protected
 
     def param(memory, value, pmode)
-      pmode.zero? ? memory[value] : value
+      case pmode
+      when 0
+        memory[value]
+      when 1
+        value
+      when 2
+        memory[@relative_ptr + value]
+      else
+        value
+      end
+    end
+
+    def set_mem(memory, value, pmode, new_value)
+      case pmode
+      when 0
+        memory[value] = new_value
+      when 1
+        nil # Do nothing I guess?
+      when 2
+        memory[@relative_ptr + value] = new_value
+      else
+        nil # Do nothing I guess?
+      end
     end
   end
 
-  class AddInstruction < Instruction
+  class InvalidInstruction < Instruction
     def self.opcode
-      1
+      -1
     end
 
     def num_params
-      3
+      0
     end
 
-    def run(memory, _opcode, *params)
-      memory[params[2]] = param(memory, params[0], @pmodes[0]) +
-                          param(memory, params[1], @pmodes[1])
-    end
-  end
-
-  class MultiplyInstruction < Instruction
-    def self.opcode
-      2
+    def run(_memory, opcode, *_params)
+      puts "Invalid instruction: #{opcode}"
     end
 
-    def num_params
-      3
-    end
-
-    def run(memory, _opcode, *params)
-      memory[params[2]] = param(memory, params[0], @pmodes[0]) *
-                          param(memory, params[1], @pmodes[1])
-    end
-  end
-
-  class InputInstruction < Instruction
-    def self.opcode
-      3
-    end
-
-    def num_params
-      1
-    end
-
-    def run(memory, _opcode, *params)
-      memory[params[0]] = @input.take
-    end
-  end
-
-  class OutputInstruction < Instruction
-    def self.opcode
-      4
-    end
-
-    def num_params
-      1
-    end
-
-    def run(memory, _opcode, *params)
-      @output << param(memory, params[0], @pmodes[0])
+    def terminate?
+      true
     end
   end
 
@@ -122,21 +109,63 @@ module Intcode
     end
   end
 
-  class InvalidInstruction < Instruction
+  class AddInstruction < Instruction
     def self.opcode
-      -1
+      1
     end
 
     def num_params
-      0
+      3
     end
 
-    def run(_memory, opcode, *_params)
-      puts "Invalid instruction: #{opcode}"
+    def run(memory, _opcode, *params)
+      new_value = param(memory, params[0], @pmodes[0]) +
+                  param(memory, params[1], @pmodes[1])
+      set_mem(memory, params[2], @pmodes[2], new_value)
+    end
+  end
+
+  class MultiplyInstruction < Instruction
+    def self.opcode
+      2
     end
 
-    def terminate?
-      true
+    def num_params
+      3
+    end
+
+    def run(memory, _opcode, *params)
+      new_value = param(memory, params[0], @pmodes[0]) *
+                  param(memory, params[1], @pmodes[1])
+      set_mem(memory, params[2], @pmodes[2], new_value)
+    end
+  end
+
+  class InputInstruction < Instruction
+    def self.opcode
+      3
+    end
+
+    def num_params
+      1
+    end
+
+    def run(memory, _opcode, *params)
+      set_mem(memory, params[0], @pmodes[0], @input.take)
+    end
+  end
+
+  class OutputInstruction < Instruction
+    def self.opcode
+      4
+    end
+
+    def num_params
+      1
+    end
+
+    def run(memory, _opcode, *params)
+      @output << param(memory, params[0], @pmodes[0])
     end
   end
 
@@ -190,7 +219,7 @@ module Intcode
     def run(memory, _opcode, *params)
       val1 = param(memory, params[0], @pmodes[0])
       val2 = param(memory, params[1], @pmodes[1])
-      memory[params[2]] = val1 < val2 ? 1 : 0
+      set_mem(memory, params[2], @pmodes[2], val1 < val2 ? 1 : 0)
     end
   end
 
@@ -206,7 +235,21 @@ module Intcode
     def run(memory, _opcode, *params)
       val1 = param(memory, params[0], @pmodes[0])
       val2 = param(memory, params[1], @pmodes[1])
-      memory[params[2]] = val1 == val2 ? 1 : 0
+      set_mem(memory, params[2], @pmodes[2], val1 == val2 ? 1 : 0)
+    end
+  end
+
+  class RelativeBaseInstruction < Instruction
+    def self.opcode
+      9
+    end
+
+    def num_params
+      1
+    end
+
+    def run(memory, _opcode, *params)
+      @relative_ptr += param(memory, params[0], @pmodes[0])
     end
   end
 end
